@@ -58,7 +58,7 @@ public class MainView extends VerticalLayout {
         // Use custom CSS classes to apply styling. This is defined in shared-styles.css.
         addClassName("centered-content");
 
-        add(textField, button);
+        add(textField, new TextField("last name"), button, new TextField("Third"), new Button("Cancel", event -> Notification.show("FOOBAR")));
     }
 
 }
