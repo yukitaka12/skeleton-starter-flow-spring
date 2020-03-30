@@ -2,10 +2,13 @@ package org.vaadin.example;
 
 import org.springframework.beans.factory.annotation.Autowired;
 
+import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.Key;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dependency.CssImport;
+import com.vaadin.flow.component.dependency.JsModule;
+import com.vaadin.flow.component.dependency.NpmPackage;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
@@ -29,6 +32,8 @@ import com.vaadin.flow.router.Route;
 @Route
 @CssImport("./styles/shared-styles.css")
 @CssImport(value = "./styles/vaadin-text-field-styles.css", themeFor = "vaadin-text-field")
+@NpmPackage(value = "lit-element", version="2.3.1")
+@JsModule("./vaadin-live-reload.js")
 public class MainView extends VerticalLayout {
 
     /**
@@ -59,6 +64,13 @@ public class MainView extends VerticalLayout {
         addClassName("centered-content");
 
         add(textField, button);
+    }
+
+    protected void onAttach(AttachEvent e) {
+        getUI().get().getPage().executeJs(
+                "let gizmo = document.createElement('vaadin-live-reload');"
+                        + "gizmo.id = 'vaadin-live-reload';"
+                        + "document.body.appendChild(gizmo);");
     }
 
 }
