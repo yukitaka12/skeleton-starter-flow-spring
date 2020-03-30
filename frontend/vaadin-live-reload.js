@@ -149,7 +149,8 @@ class VaadinLiveReload extends LitElement {
         self.connection.onmessage = msg => self.handleMessage(msg);
         self.connection.onerror = e => {
             // TODO: Use the passed service URL
-            let url = 'ws://' + hostname + ':' + window.location.port + '/?refresh_connection;';
+            let url = window.location.toString().replace("http://", "ws://")
+                + '?refresh_connection';
             self.connection = new WebSocket(url);
             self.connection.onmessage = msg => self.handleMessage(msg);
             self.connection.onerror = e => self.handleError(e);
@@ -188,7 +189,7 @@ class VaadinLiveReload extends LitElement {
     }
 
     handleError(msg) {
-        console.log.error(msg);
+        console.error(msg);
         this.status = VaadinLiveReload.ERROR;
     }
 
