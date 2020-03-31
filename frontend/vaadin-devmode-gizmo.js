@@ -1,6 +1,6 @@
 import {LitElement, html, css} from 'lit-element';
 
-class VaadinLiveReload extends LitElement {
+class VaadinDevmodeGizmo extends LitElement {
 
   static get styles() {
     return css`
@@ -81,7 +81,8 @@ class VaadinLiveReload extends LitElement {
       expanded: {type: Boolean},
       messages: {type: Array},
       status: {type: String},
-      notification: {type: String}
+      notification: {type: String},
+      serviceurl: {type: String}
     };
   }
 
@@ -113,17 +114,21 @@ class VaadinLiveReload extends LitElement {
     return 'vaadin.live-reload.triggered';
   }
 
+  static get TRIGGERED_COUNT_KEY_IN_SESSION_STORAGE() {
+    return 'vaadin.live-reload.triggeredCount';
+  }
+
   static get SPRING_DEV_TOOLS_PORT() {
     return 35729;
   }
 
   static get isEnabled() {
-    const enabled = window.localStorage.getItem(VaadinLiveReload.ENABLED_KEY_IN_LOCAL_STORAGE);
+    const enabled = window.localStorage.getItem(VaadinDevmodeGizmo.ENABLED_KEY_IN_LOCAL_STORAGE);
     return enabled === null || !(enabled === 'false');
   }
 
   static get isActive() {
-    const active = window.sessionStorage.getItem(VaadinLiveReload.ACTIVE_KEY_IN_SESSION_STORAGE);
+    const active = window.sessionStorage.getItem(VaadinDevmodeGizmo.ACTIVE_KEY_IN_SESSION_STORAGE);
     return active === null || active !== 'false';
   }
 
@@ -131,7 +136,7 @@ class VaadinLiveReload extends LitElement {
     super();
     this.messages = [];
     this.expanded = false;
-    this.status = VaadinLiveReload.UNAVAILABLE;
+    this.status = VaadinDevmodeGizmo.UNAVAILABLE;
     this.notification = null;
     this.connection = null;
   }
@@ -143,17 +148,31 @@ class VaadinLiveReload extends LitElement {
     }
     const self = this;
     const hostname = window.location.hostname;
-    // try Spring Boot devtools first
+    // try Spring Boot Devtools first
     self.connection = new WebSocket(
-      'ws://' + hostname + ':' + VaadinLiveReload.SPRING_DEV_TOOLS_PORT);
+      'ws://' + hostname + ':' + VaadinDevmodeGizmo.SPRING_DEV_TOOLS_PORT);
     self.connection.onmessage = msg => self.handleMessage(msg);
-    self.connection.onerror = e => {
-      // TODO: Use the passed service URL
-      const url = window.location.toString().replace('http://', 'ws://')
-        + '?refresh_connection';
-      self.connection = new WebSocket(url);
-      self.connection.onmessage = msg => self.handleMessage(msg);
-      self.connection.onerror = e => self.handleError(e);
+    self.connection.onclose = _ => {
+      self.status = VaadinDevmodeGizmo.UNAVAILABLE;
+    };
+    self.connection.onerror = err => {
+      if (self.status === VaadinDevmodeGizmo.UNAVAILABLE) {
+        // no Spring, try the dedicated push channel
+        const url = self.serviceurl ? self.serviceurl : window.location.toString();
+        if (!url.startsWith('http://')) {
+          console.warn('The protocol of the url should be http for live reload to work.');
+          return;
+        }
+        const wsUrl = url.replace(/^http:/, 'ws:') + '?refresh_connection';
+        self.connection = new WebSocket(wsUrl);
+        self.connection.onmessage = msg => self.handleMessage(msg);
+        self.connection.onerror = err => self.handleError(err);
+        self.connection.onclose = _ => {
+          self.status = VaadinDevmodeGizmo.UNAVAILABLE;
+        };
+      } else {
+        self.handleError(err);
+      }
     };
   }
 
@@ -162,23 +181,22 @@ class VaadinLiveReload extends LitElement {
     const command = json['command'];
     switch (command) {
       case 'hello':
-        if (VaadinLiveReload.isActive) {
-          this.status = VaadinLiveReload.ACTIVE;
+        if (VaadinDevmodeGizmo.isActive) {
+          this.status = VaadinDevmodeGizmo.ACTIVE;
         } else {
-          this.status = VaadinLiveReload.INACTIVE;
+          this.status = VaadinDevmodeGizmo.INACTIVE;
         }
         this.showMessage('Live reload available');
         this.connection.onerror = e => self.handleError(e);
         break;
 
       case 'reload':
-        if (this.status === VaadinLiveReload.ACTIVE) {
+        if (this.status === VaadinDevmodeGizmo.ACTIVE) {
           this.showNotification('Reloading...');
-          const now = new Date();
-          const reloaded = ('0' + now.getHours()).slice(-2) + ':'
-            + ('0' + now.getMinutes()).slice(-2) + ':'
-            + ('0' + now.getSeconds()).slice(-2);
-          window.sessionStorage.setItem(VaadinLiveReload.TRIGGERED_KEY_IN_SESSION_STORAGE, reloaded);
+          const lastReload = window.sessionStorage.getItem(VaadinDevmodeGizmo.TRIGGERED_COUNT_KEY_IN_SESSION_STORAGE);
+          const nextReload = lastReload ? (parseInt(lastReload) + 1) : 1;
+          window.sessionStorage.setItem(VaadinDevmodeGizmo.TRIGGERED_COUNT_KEY_IN_SESSION_STORAGE, nextReload.toString());
+          window.sessionStorage.setItem(VaadinDevmodeGizmo.TRIGGERED_KEY_IN_SESSION_STORAGE, 'true');
           window.location.reload();
         }
         break;
@@ -190,7 +208,7 @@ class VaadinLiveReload extends LitElement {
 
   handleError(msg) {
     console.error(msg);
-    this.status = VaadinLiveReload.ERROR;
+    this.status = VaadinDevmodeGizmo.ERROR;
   }
 
   connectedCallback() {
@@ -198,17 +216,17 @@ class VaadinLiveReload extends LitElement {
     this.disableEventListener = e => this.demoteNotification();
     document.body.addEventListener('focus', this.disableEventListener);
     document.body.addEventListener('click', this.disableEventListener);
-    if (!VaadinLiveReload.isEnabled) {
-      // TODO: should not be created at all if disabled in local storage
-      this.disableLiveReload();
-    } else {
-      this.openWebSocketConnection();
-    }
+    this.openWebSocketConnection();
 
-    const lastReload = window.sessionStorage.getItem(VaadinLiveReload.TRIGGERED_KEY_IN_SESSION_STORAGE);
+    const lastReload = window.sessionStorage.getItem(VaadinDevmodeGizmo.TRIGGERED_KEY_IN_SESSION_STORAGE);
     if (lastReload) {
-      this.showNotification('Last automatic reload on ' + lastReload);
-      window.sessionStorage.removeItem(VaadinLiveReload.TRIGGERED_KEY_IN_SESSION_STORAGE);
+      const count = window.sessionStorage.getItem(VaadinDevmodeGizmo.TRIGGERED_COUNT_KEY_IN_SESSION_STORAGE);
+      const now = new Date();
+      const reloaded = ('0' + now.getHours()).slice(-2) + ':'
+        + ('0' + now.getMinutes()).slice(-2) + ':'
+        + ('0' + now.getSeconds()).slice(-2);
+      this.showNotification('Automatic reload #' + count + ' finished on ' + reloaded);
+      window.sessionStorage.removeItem(VaadinDevmodeGizmo.TRIGGERED_KEY_IN_SESSION_STORAGE);
     }
   }
 
@@ -219,11 +237,8 @@ class VaadinLiveReload extends LitElement {
   }
 
   disableLiveReload() {
-    window.localStorage.setItem(VaadinLiveReload.ENABLED_KEY_IN_LOCAL_STORAGE, 'false');
-    if (this.id) {
-      const element = document.getElementById(this.id);
-      element.parentNode.removeChild(element);
-    }
+    window.localStorage.setItem(VaadinDevmodeGizmo.ENABLED_KEY_IN_LOCAL_STORAGE, 'false');
+    this.remove();
   }
 
   toggleExpanded() {
@@ -247,22 +262,22 @@ class VaadinLiveReload extends LitElement {
 
   setActive(yes) {
     if (yes) {
-      window.sessionStorage.setItem(VaadinLiveReload.ACTIVE_KEY_IN_SESSION_STORAGE, 'true');
-      this.status = VaadinLiveReload.ACTIVE;
+      window.sessionStorage.setItem(VaadinDevmodeGizmo.ACTIVE_KEY_IN_SESSION_STORAGE, 'true');
+      this.status = VaadinDevmodeGizmo.ACTIVE;
     } else {
-      window.sessionStorage.setItem(VaadinLiveReload.ACTIVE_KEY_IN_SESSION_STORAGE, 'false');
-      this.status = VaadinLiveReload.INACTIVE;
+      window.sessionStorage.setItem(VaadinDevmodeGizmo.ACTIVE_KEY_IN_SESSION_STORAGE, 'false');
+      this.status = VaadinDevmodeGizmo.INACTIVE;
     }
   }
 
   getStatusColor() {
-    if (this.status === VaadinLiveReload.ACTIVE) {
+    if (this.status === VaadinDevmodeGizmo.ACTIVE) {
       return 'green';
-    } else if (this.status === VaadinLiveReload.INACTIVE) {
+    } else if (this.status === VaadinDevmodeGizmo.INACTIVE) {
       return 'grey';
-    } else if (this.status === VaadinLiveReload.UNAVAILABLE) {
+    } else if (this.status === VaadinDevmodeGizmo.UNAVAILABLE) {
       return 'yellow';
-    } else if (this.status === VaadinLiveReload.ERROR) {
+    } else if (this.status === VaadinDevmodeGizmo.ERROR) {
       return 'red';
     } else {
       return 'none';
@@ -273,14 +288,14 @@ class VaadinLiveReload extends LitElement {
     return html`
             <div class="vaadin-live-reload">
                 ${this.notification !== null
-    ? html`<div class="gizmo notification" @click=${e => this.toggleExpanded()}>${this.notification}</div>`
-    : html`<div class="gizmo vaadin-logo" @click=${e => this.toggleExpanded()}>}&gt;</div>`}
+      ? html`<div class="gizmo notification" @click=${e => this.toggleExpanded()}>${this.notification}</div>`
+      : html`<div class="gizmo vaadin-logo" @click=${e => this.toggleExpanded()}>}&gt;</div>`}
 
                 <span class="status-blip" style="background-color: ${this.getStatusColor()}"></span>
                 <div class="window" style="visibility: ${this.expanded ? 'visible' : 'hidden'}">
                     <div class="window-header">
-                        <input type="button" value="Disable" @click=${e => this.disableLiveReload()}/>
-                        <input type="checkbox" ?checked="${this.status === VaadinLiveReload.ACTIVE}" 
+                        <button id="disable" @click=${e => this.disableLiveReload()}>Disable</button>
+                        <input id="toggle" type="checkbox" ?checked="${this.status === VaadinDevmodeGizmo.ACTIVE}" 
                         @change=${e => this.setActive(e.target.checked)}>Live-reload</input>
                     </div>
                     <div class="message-tray">
@@ -291,4 +306,4 @@ class VaadinLiveReload extends LitElement {
   }
 }
 
-customElements.define('vaadin-live-reload', VaadinLiveReload);
+customElements.define('vaadin-devmode-gizmo', VaadinDevmodeGizmo);

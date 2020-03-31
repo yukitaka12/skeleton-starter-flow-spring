@@ -33,7 +33,7 @@ import com.vaadin.flow.router.Route;
 @CssImport("./styles/shared-styles.css")
 @CssImport(value = "./styles/vaadin-text-field-styles.css", themeFor = "vaadin-text-field")
 @NpmPackage(value = "lit-element", version="2.3.1")
-@JsModule("./vaadin-live-reload.js")
+@JsModule("./vaadin-devmode-gizmo.js")
 public class MainView extends VerticalLayout {
 
     /**
@@ -68,8 +68,7 @@ public class MainView extends VerticalLayout {
 
     protected void onAttach(AttachEvent e) {
         getUI().get().getPage().executeJs(
-                "let gizmo = document.createElement('vaadin-live-reload');"
-                        + "gizmo.id = 'vaadin-live-reload';"
+                "let gizmo = document.createElement('vaadin-devmode-gizmo');"
                         + "document.body.appendChild(gizmo);");
     }
 
