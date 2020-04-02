@@ -82,7 +82,8 @@ class VaadinDevmodeGizmo extends LitElement {
       messages: {type: Array},
       status: {type: String},
       notification: {type: String},
-      serviceurl: {type: String}
+      serviceurl: {type: String},
+      springBootDevToolsPort: {type: Number}
     };
   }
 
@@ -118,8 +119,8 @@ class VaadinDevmodeGizmo extends LitElement {
     return 'vaadin.live-reload.triggeredCount';
   }
 
-  static get SPRING_DEV_TOOLS_PORT() {
-    return 35729;
+  static get HEARTBEAT_INTERVAL() {
+    return 180000;
   }
 
   static get isEnabled() {
@@ -146,34 +147,51 @@ class VaadinDevmodeGizmo extends LitElement {
       this.connection.close();
       this.connection = null;
     }
-    const self = this;
     const hostname = window.location.hostname;
-    // try Spring Boot Devtools first
-    self.connection = new WebSocket(
-      'ws://' + hostname + ':' + VaadinDevmodeGizmo.SPRING_DEV_TOOLS_PORT);
-    self.connection.onmessage = msg => self.handleMessage(msg);
-    self.connection.onclose = _ => {
-      self.status = VaadinDevmodeGizmo.UNAVAILABLE;
-    };
-    self.connection.onerror = err => {
-      if (self.status === VaadinDevmodeGizmo.UNAVAILABLE) {
-        // no Spring, try the dedicated push channel
-        const url = self.serviceurl ? self.serviceurl : window.location.toString();
-        if (!url.startsWith('http://')) {
-          console.warn('The protocol of the url should be http for live reload to work.');
-          return;
+    // try Spring Boot Devtools first, if port is set
+    if (this.springBootDevToolsPort) {
+      const self = this;
+      self.connection = new WebSocket(
+        'ws://' + hostname + ':' + this.springBootDevToolsPort);
+      self.connection.onmessage = msg => self.handleMessage(msg);
+      self.connection.onclose = _ => {
+        self.status = VaadinDevmodeGizmo.UNAVAILABLE;
+        // TODO Not setting connection to null here because it will race with the
+        // next connection attempt to the dedicated push channel.
+      };
+      self.connection.onerror = err => {
+        if (self.status === VaadinDevmodeGizmo.UNAVAILABLE) {
+          // no Spring, try the dedicated push channel
+          self.openDedicatedWebSocketConnection();
+        } else {
+          self.handleError(err);
         }
-        const wsUrl = url.replace(/^http:/, 'ws:') + '?refresh_connection';
-        self.connection = new WebSocket(wsUrl);
-        self.connection.onmessage = msg => self.handleMessage(msg);
-        self.connection.onerror = err => self.handleError(err);
-        self.connection.onclose = _ => {
-          self.status = VaadinDevmodeGizmo.UNAVAILABLE;
-        };
-      } else {
-        self.handleError(err);
-      }
+      };
+    } else {
+      this.openDedicatedWebSocketConnection();
+    }
+  }
+
+  openDedicatedWebSocketConnection() {
+    const url = this.serviceurl ? this.serviceurl : window.location.toString();
+    if (!url.startsWith('http://')) {
+      console.warn('The protocol of the url should be http for live reload to work.');
+      return;
+    }
+    const wsUrl = url.replace(/^http:/, 'ws:') + '?refresh_connection';
+    const self = this;
+    this.connection = new WebSocket(wsUrl);
+    this.connection.onmessage = msg => this.handleMessage(msg);
+    this.connection.onerror = err => this.handleError(err);
+    this.connection.onclose = _ => {
+      self.status = VaadinDevmodeGizmo.UNAVAILABLE;
+      self.connection = null;
     };
+    setInterval(function() {
+      if (self.connection !== null) {
+        self.connection.send('');
+      }
+    }, VaadinDevmodeGizmo.HEARTBEAT_INTERVAL);
   }
 
   handleMessage(msg) {
@@ -202,7 +220,7 @@ class VaadinDevmodeGizmo extends LitElement {
         break;
 
       default:
-        console.warn('unknown command:', command);
+        console.warn('Unknown command received from the live reload server:', command);
     }
   }
 
@@ -213,6 +231,8 @@ class VaadinDevmodeGizmo extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+
+    // when focus or clicking anywhere, move the notification to the message tray
     this.disableEventListener = e => this.demoteNotification();
     document.body.addEventListener('focus', this.disableEventListener);
     document.body.addEventListener('click', this.disableEventListener);
@@ -225,7 +245,7 @@ class VaadinDevmodeGizmo extends LitElement {
       const reloaded = ('0' + now.getHours()).slice(-2) + ':'
         + ('0' + now.getMinutes()).slice(-2) + ':'
         + ('0' + now.getSeconds()).slice(-2);
-      this.showNotification('Automatic reload #' + count + ' finished on ' + reloaded);
+      this.showNotification('Automatic reload #' + count + ' finished at ' + reloaded);
       window.sessionStorage.removeItem(VaadinDevmodeGizmo.TRIGGERED_KEY_IN_SESSION_STORAGE);
     }
   }

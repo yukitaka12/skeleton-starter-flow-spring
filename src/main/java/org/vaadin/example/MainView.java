@@ -69,6 +69,7 @@ public class MainView extends VerticalLayout {
     protected void onAttach(AttachEvent e) {
         getUI().get().getPage().executeJs(
                 "let gizmo = document.createElement('vaadin-devmode-gizmo');"
+                        + "gizmo.setAttribute('springbootdevtoolsport','35729');"
                         + "document.body.appendChild(gizmo);");
     }
 
