@@ -15,7 +15,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-        <vaadin.version>15.0.3</vaadin.version>
+        <vaadin.version>16.0-20200406.053337-52</vaadin.version>
     </properties>
 
     <parent>
@@ -53,6 +53,11 @@
                 <enabled>false</enabled>
             </snapshots>
         </repository>
+        <repository>
+             <id>vaadin-snapshots</id>
+             <url>https://oss.sonatype.org/content/repositories/vaadin-snapshots</url>
+             <snapshots><enabled>true</enabled></snapshots>
+         </repository>
     </repositories>
 
     <pluginRepositories>
@@ -72,6 +77,11 @@
             <snapshots>
                 <enabled>false</enabled>
             </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>vaadin-snapshots</id>
+            <url>https://oss.sonatype.org/content/repositories/vaadin-snapshots</url>
+            <snapshots><enabled>true</enabled></snapshots>
         </pluginRepository>
     </pluginRepositories>
 
@@ -139,7 +149,7 @@
             <plugin>
                 <groupId>com.vaadin</groupId>
                 <artifactId>vaadin-maven-plugin</artifactId>
-                <version>${vaadin.version}</version>
+                <version>16.0-20200406.053342-52</version>
                 <executions>
                     <execution>
                         <goals>
@@ -178,7 +188,7 @@
                     <plugin>
                         <groupId>com.vaadin</groupId>
                         <artifactId>vaadin-maven-plugin</artifactId>
-                        <version>${vaadin.version}</version>
+                        <version>16.0-20200406.053342-52</version>
                         <executions>
                             <execution>
                                 <goals>
