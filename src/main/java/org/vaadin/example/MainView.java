@@ -70,6 +70,7 @@ public class MainView extends VerticalLayout {
         getUI().get().getPage().executeJs(
                 "let gizmo = document.createElement('vaadin-devmode-gizmo');"
                         + "gizmo.setAttribute('springbootdevtoolsport','35729');"
+                        + "gizmo.setAttribute('liveReloadBackend','SPRING_BOOT_DEVTOOLS');"
                         + "document.body.appendChild(gizmo);");
     }
 
