@@ -7,13 +7,13 @@ class VaadinDevmodeGizmo extends LitElement {
        :host {
           --gizmo-border-radius: 1rem;
        }
-    
+
        a {
           color: #fff;
           text-decoration: none;
           font-weight: 600;
        }
-    
+
       .gizmo-container {
           display: flex;
           align-items: center;
@@ -33,25 +33,25 @@ class VaadinDevmodeGizmo extends LitElement {
           transition: 400ms;
           z-index: 20000;
       }
-      
+
       .gizmo-container:hover,
       .gizmo-container.active {
           transform: translateX(0);
           background-color: rgba(50,50,50,1);
       }
-      
+
       .gizmo-container .status-description a {
           margin-left: var(--lumo-space-s);
       }
-      
+
       .gizmo-container .status-description {
           opacity: 1;
       }
-      
+
       .gizmo-container:hover .status-description {
           opacity: 1;
       }
-      
+
       .gizmo-container .status-blip {
           display: block;
           background-color: green;
@@ -61,8 +61,8 @@ class VaadinDevmodeGizmo extends LitElement {
           margin-right: var(--lumo-space-s);
           z-index: 20001;
       }
-      
-      .gizmo { 
+
+      .gizmo {
           position: fixed;
           right: 0px;
           bottom: 1rem;
@@ -70,25 +70,76 @@ class VaadinDevmodeGizmo extends LitElement {
           color: rgba(255,255,255,.8);
           z-index: 20000;
       }
-      
+
+      .switch {
+          position: relative;
+          display: inline-block;
+          margin-top: auto;
+          margin-bottom: auto;
+          width: 28px;
+          height: 18px;
+      }
+
+      .switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+      }
+
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        border-radius: 18px;
+        background-color: #ccc;
+        -webkit-transition: .4s;
+        transition: .4s;
+      }
+
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 14px;
+        width: 14px;
+        left: 2px;
+        bottom: 2px;
+        background-color: white;
+        -webkit-transition: .4s;
+        transition: .4s;
+        border-radius: 50%;
+      }
+
+      input:checked + .slider {
+        background-color: var(--lumo-success-color);
+      }
+
+      input:checked + .slider:before {
+        -webkit-transform: translateX(10px);
+        -ms-transform: translateX(10px);
+        transform: translateX(10px);
+      }
+
       .window.hidden {
           opacity: 0;
           transform: scale(0.1,0.4);
       }
-      
+
       .window.visible {
           transform: scale(1,1);
           opacity: 1;
       }
-      
+
       .window.visible ~ .gizmo-container {
           opacity: 0;
       }
-      
+
       .window.hidden ~ .gizmo-container {
           opacity: 1;
       }
-      
+
       .window {
           position: fixed;
           right: 1rem;
@@ -101,25 +152,46 @@ class VaadinDevmodeGizmo extends LitElement {
           transition: 400ms;
           transform-origin: bottom right;
       }
-      
+
       .window-header {
+          display: flex;
+          justify-content: flex-end;
           background-color: rgba(40,40,40,1);
           border-radius: var(--lumo-border-radius-l) var(--lumo-border-radius-l) 0px 0px;
           border-bottom: 1px solid rgba(70,70,70,1);
           padding: var(--lumo-space-xs) var(--lumo-space-s);
           text-align: right;
       }
-      
+
       .message-tray .message {
           padding: var(--lumo-space-xs) var(--lumo-space-s);
       }
       .message-tray .message:not(:last-of-type) {
           border-bottom: 1px solid rgba(70,70,70,1);
       }
-      
+
       .message-tray .message:before {
           content: "ⓘ";
           margin-right: var(--lumo-space-s);
+      }
+
+      .ahreflike {
+          cursor: pointer;
+          font-weight: 600;
+      }
+
+      #live-reload-text {
+          margin-left: 4px;
+          margin-right: 4px;
+      }
+      
+      #minimize {
+          width: 16px;
+          height: 16px;
+          background-color: #0000;
+          border: 0;
+          padding: 0;
+          margin: 3px;
       }
     `;
   }
@@ -172,6 +244,10 @@ class VaadinDevmodeGizmo extends LitElement {
     return 180000;
   }
 
+  static get AUTO_DEMOTE_NOTIFICATION_DELAY() {
+    return 5000;
+  }
+
   static get HOTSWAP_AGENT() {
     return 'HOTSWAP_AGENT';
   }
@@ -222,8 +298,10 @@ class VaadinDevmodeGizmo extends LitElement {
       const self = this;
       self.connection = new WebSocket(
         'ws://' + hostname + ':' + this.springBootDevToolsPort);
-    } else {
+    } else if (this.liveReloadBackend) {
       this.openDedicatedWebSocketConnection();
+    } else {
+      this.showMessage('Live reload unavailable');
     }
     if (this.connection) {
       this.connection.onmessage = msg => this.handleMessage(msg);
@@ -266,7 +344,6 @@ class VaadinDevmodeGizmo extends LitElement {
           this.showMessage('Live reload available: ' + backend);
         } else {
           this.status = VaadinDevmodeGizmo.INACTIVE;
-          this.showMessage('Live reload unavailable');
         }
         break;
       }
@@ -334,6 +411,12 @@ class VaadinDevmodeGizmo extends LitElement {
 
   showNotification(msg) {
     this.notification = msg;
+    // automatically move notification to message tray after a certain amount of time
+    if (this.notification != null) {
+      setTimeout(() => {
+        this.demoteNotification();
+      }, VaadinDevmodeGizmo.AUTO_DEMOTE_NOTIFICATION_DELAY);
+    }
   }
 
   showMessage(msg) {
@@ -374,13 +457,27 @@ class VaadinDevmodeGizmo extends LitElement {
   render() {
     return html`
             <div class="vaadin-live-reload">
-            
+
             <div class="window ${this.expanded ? 'visible' : 'hidden'}">
                     <div class="window-header">
-                        <!--button id="disable" @click=${e => this.disableLiveReload()}>Disable</button-->
-                        <input id="toggle" type="checkbox" ?checked="${this.status === VaadinDevmodeGizmo.ACTIVE}" 
-                        @change=${e => this.setActive(e.target.checked)}>Live-reload</input>
-                        <button id="minimize" @click=${e => this.toggleExpanded()}>X</button>
+                        <label class="switch">
+                            <input id="toggle" type="checkbox"
+                                ?disabled=${this.status === VaadinDevmodeGizmo.UNAVAILABLE || this.status === VaadinDevmodeGizmo.ERROR}
+                                ?checked="${this.status === VaadinDevmodeGizmo.ACTIVE}"
+                            @change=${e => this.setActive(e.target.checked)}/>
+                            <span class="slider"></span>
+                         </label>
+                         <span id="live-reload-text">Live-reload</span>
+                         <button id="minimize" @click=${e => this.toggleExpanded()}>
+                           <svg xmlns="http://www.w3.org/2000/svg">
+                             <g stroke="#AAA" stroke-width="1.25">
+                               <rect rx="5" x="0.5" y="0.5" height="16" width="16" fill-opacity="0"/>
+                               <line y2="12.1" x2="12.3" y1="3.4" x1="3" />
+                               <line y2="8.5" x2="12.1" y1="12.4" x1="12.8" />
+                               <line y2="12.1" x2="8.7" y1="12.1" x1="12.8" />
+                             </g>
+                          </svg>
+                        </button>
                     </div>
                     <div class="message-tray">
                          ${this.messages.map(i => html`<div class="message">${i}</div>`)}
@@ -389,11 +486,12 @@ class VaadinDevmodeGizmo extends LitElement {
 
       <div class="gizmo-container ${this.notification !== null ? 'active' : ''}" @click=${e => this.toggleExpanded()}>
         <span class="status-blip" style="background-color: ${this.getStatusColor()}"></span>
-        ${this.notification !== null
-            ? html`<span class="status-description">${this.notification}</span></div>`
-            : html`<span class="status-description">Debugger<a href="#">Show</a></span></div>`
-        }
+    ${this.notification !== null
+      ? html`<span class="status-description">${this.notification}</span></div>`
+      : html`<span class="status-description"><span class="ahreflike">Show</span></span></div>`
+    }
       </div>`;
   }
 }
+
 customElements.define('vaadin-devmode-gizmo', VaadinDevmodeGizmo);
