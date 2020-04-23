@@ -486,6 +486,7 @@ class VaadinDevmodeGizmo extends LitElement {
     this.expanded = false;
     this.status = VaadinDevmodeGizmo.UNAVAILABLE;
     this.connection = null;
+    this.nextMessageId = 1;
   }
 
   openWebSocketConnection() {
@@ -611,7 +612,7 @@ class VaadinDevmodeGizmo extends LitElement {
   }
 
   toggleExpanded() {
-    this.notifications.slice().forEach(notification => this.demoteNotification(notification.id));
+    this.notifications.slice().forEach(notification => this.dismissNotification(notification.id));
     this.expanded = !this.expanded;
   }
 
@@ -633,7 +634,7 @@ class VaadinDevmodeGizmo extends LitElement {
   }
 
   showMessage(type, msg, details = null, link = null) {
-    const id = this.messages.length;
+    const id = this.nextMessageId++;
     this.messages.push({
       id: id,
       type: type,
@@ -646,7 +647,7 @@ class VaadinDevmodeGizmo extends LitElement {
 
   showNotification(type, msg, details = null, link = null, persistentId = null) {
     if (persistentId === null || !VaadinDevmodeGizmo.notificationDismissed(persistentId)) {
-      const id = this.notifications.length;
+      const id = this.nextMessageId++;
       this.notifications.push({
         id: id,
         type: type,
@@ -658,7 +659,7 @@ class VaadinDevmodeGizmo extends LitElement {
       // automatically move notification to message tray after a certain amount of time unless it contains a link
       if (link === null) {
         setTimeout(() => {
-          this.demoteNotification(id);
+          this.dismissNotification(id);
         }, VaadinDevmodeGizmo.AUTO_DEMOTE_NOTIFICATION_DELAY);
       }
       this.requestUpdate();
@@ -667,9 +668,9 @@ class VaadinDevmodeGizmo extends LitElement {
     }
   }
 
-  demoteNotification(id, persistently = false) {
+  dismissNotification(id, persistently = false) {
     const index = this.notifications.findIndex(notification => notification.id === id);
-    if (index !== -1) {
+    if (index !== -1 && !this.notifications[index].deleted) {
       const notification = this.notifications[index];
 
       // user is explicitly dismissing a notification---after that we won't bug them with it
@@ -683,9 +684,17 @@ class VaadinDevmodeGizmo extends LitElement {
         window.localStorage.setItem(VaadinDevmodeGizmo.DISMISSED_NOTIFICATIONS_IN_LOCAL_STORAGE, dismissed);
       }
 
-      this.notifications.splice(index, 1);
+      notification.deleted = true;
       this.showMessage(notification.type, notification.message, notification.details, notification.link);
-      this.requestUpdate();
+
+      // give some time for the animation
+      setTimeout(() => {
+        const index = this.notifications.findIndex(notification => notification.id === id);
+        if (index != -1) {
+          this.notifications.splice(index, 1);
+          this.requestUpdate();
+        }
+      }, 400);
     }
   }
 
@@ -715,12 +724,12 @@ class VaadinDevmodeGizmo extends LitElement {
 
   renderMessage(messageObject) {
     return html`
-      <div class="message ${messageObject.type}" @click=${e => this.demoteNotification(messageObject.id)}>
+      <div class="message ${messageObject.type} ${messageObject.deleted ? 'animate-out' : ''}" @click=${e => this.dismissNotification(messageObject.id)}>
         <div class="message-content">${messageObject.message}</div>
         ${messageObject.details ? html`<div class="message-details">${messageObject.details}</div>` : ''}
         <div class="message-actions">
             ${messageObject.link ? html`<a href="${messageObject.link}" target="_blank">Read more</a>` : ''}
-            ${messageObject.details ? html`<span class="ahreflike dismiss-message" @click=${e => this.demoteNotification(messageObject.id, true)}>Dismiss</span>` : ''}
+            ${messageObject.persistentId ? html`<span class="ahreflike dismiss-message" @click=${e => this.dismissNotification(messageObject.id, true)}>Don't show again</span>` : ''}
         </div>
       </div>
       `;
@@ -736,7 +745,7 @@ class VaadinDevmodeGizmo extends LitElement {
                 <input id="toggle" type="checkbox"
                     ?disabled=${this.status === VaadinDevmodeGizmo.UNAVAILABLE || this.status === VaadinDevmodeGizmo.ERROR}
                     ?checked="${this.status === VaadinDevmodeGizmo.ACTIVE}"
-                @change=${e => this.setActive(e.target.checked)}/>
+                    @change=${e => this.setActive(e.target.checked)}/>
                 <span class="slider"></span>
              </label>
              <span class="live-reload-text">Live-reload</span>
