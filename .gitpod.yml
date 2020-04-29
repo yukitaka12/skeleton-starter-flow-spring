@@ -9,3 +9,6 @@ github:
   prebuilds:
     # enable prebuilds for all branches in this repo
     branches: true 
+
+image:
+  file: .gitpod.Dockerfile
