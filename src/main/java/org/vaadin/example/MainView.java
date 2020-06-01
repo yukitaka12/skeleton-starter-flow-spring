@@ -52,6 +52,7 @@ public class MainView extends VerticalLayout {
         add(typeField);
 
         TextField messageField = new TextField("Message");
+        messageField.setTitle("Main notification contents");
         messageField.setValue("Test notification");
         add(messageField);
 
@@ -59,9 +60,11 @@ public class MainView extends VerticalLayout {
         add(detailsField);
 
         TextField linkField = new TextField("Link URL");
+        linkField.setTitle("Optional link from notification");
         add(linkField);
 
         TextField persistenceIdField = new TextField("Persistence ID");
+        persistenceIdField.setTitle("Notifications with persistence ID allows permanent dismissal (setting saved in localstorage)");
         add(persistenceIdField);
 
         Button showNotification = new Button("Show notification", e -> {
@@ -81,6 +84,7 @@ public class MainView extends VerticalLayout {
         add(showNotification);
 
         TextField splashMessageField = new TextField("Splash message");
+        splashMessageField.setTitle("Message shown directly on gizmo instead of in separate bubble");
         splashMessageField.setValue("Test splash message");
         add(splashMessageField);
 

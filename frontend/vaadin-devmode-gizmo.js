@@ -14,6 +14,10 @@ class VaadinDevmodeGizmo extends LitElement {
           direction: ltr;
        }
 
+      .vaadin-devmode-gizmo-root > * {
+          z-index: 20000;
+      }
+
       .gizmo {
           display: flex;
           align-items: center;
@@ -30,7 +34,6 @@ class VaadinDevmodeGizmo extends LitElement {
           color: rgba(255,255,255,.8);
           transform: translateX(calc(100% - 2rem));
           transition: 400ms;
-          z-index: 20000;
       }
 
       .gizmo:hover,
@@ -132,6 +135,10 @@ class VaadinDevmodeGizmo extends LitElement {
         transform: translateX(10px);
       }
 
+     .switch input:disabled + .slider:before {
+        background-color: var(--gizmo-grey-color);
+      }
+
       .window.hidden {
           opacity: 0;
           transform: scale(0.1,0.4);
@@ -165,15 +172,31 @@ class VaadinDevmodeGizmo extends LitElement {
 
       .window-header {
           display: flex;
-          justify-content: flex-end;
+          justify-content: space-between; 
           align-items: center;
           background-color: rgba(40,40,40,1);
           border-radius: .5rem .5rem 0px 0px;
-          border-bottom: 1px solid rgba(70,70,70,1);
           padding: .25rem .5rem;
-          text-align: right;
       }
-            
+      
+      .window-tabs {
+          display: flex;
+          justify-content: space-between; 
+          background-color: rgba(40,40,40,1);
+          border-bottom: 1px solid rgba(70,70,70,1);
+          text-align: right;
+          padding: .25rem .5rem;
+      }
+      
+      .title {
+          font-weight: 600;
+      }
+      
+      .tab {
+          color: #ccc;
+          font-weight: 600;
+      }   
+                  
       .ahreflike {
           cursor: pointer;
           font-weight: 600;
@@ -293,7 +316,6 @@ class VaadinDevmodeGizmo extends LitElement {
           height: auto;
           width: auto;
           padding-left: .5rem;
-          z-index: 20000;
       }
       
       .notification-tray .message {
@@ -386,6 +408,7 @@ class VaadinDevmodeGizmo extends LitElement {
       notifications: {type: Array},
       status: {type: String},
       serviceurl: {type: String},
+      liveReloadPath: {type: String},
       liveReloadBackend: {type: String},
       springBootDevToolsPort: {type: Number}
     };
@@ -463,6 +486,10 @@ class VaadinDevmodeGizmo extends LitElement {
     return 'warning';
   }
 
+  static get WEBSOCKET_ERROR_MESSAGE() {
+    return 'Error in WebSocket connection to ';
+  }
+
   static get isEnabled() {
     const enabled = window.localStorage.getItem(VaadinDevmodeGizmo.ENABLED_KEY_IN_LOCAL_STORAGE);
     return enabled === null || enabled !== 'false';
@@ -494,12 +521,9 @@ class VaadinDevmodeGizmo extends LitElement {
       this.connection.close();
       this.connection = null;
     }
-    const hostname = window.location.hostname;
     // try Spring Boot Devtools first, if port is set
     if (this.liveReloadBackend === VaadinDevmodeGizmo.SPRING_BOOT_DEVTOOLS && this.springBootDevToolsPort) {
-      const self = this;
-      self.connection = new WebSocket(
-        'ws://' + hostname + ':' + this.springBootDevToolsPort);
+      this.connection = new WebSocket(this.getSpringBootWebSocketUrl(window.location));
     } else if (this.liveReloadBackend) {
       this.openDedicatedWebSocketConnection();
     } else {
@@ -512,31 +536,65 @@ class VaadinDevmodeGizmo extends LitElement {
     if (this.connection) {
       this.connection.onmessage = msg => this.handleMessage(msg);
       this.connection.onerror = err => this.handleError(err);
+      const self = this;
       this.connection.onclose = _ => {
-        self.status = VaadinDevmodeGizmo.UNAVAILABLE;
+        if (self.status !== VaadinDevmodeGizmo.ERROR) {
+          self.status = VaadinDevmodeGizmo.UNAVAILABLE;
+        }
         self.connection = null;
       };
     }
   }
 
   openDedicatedWebSocketConnection() {
-    const url = this.serviceurl ? this.serviceurl : window.location.toString();
-    if (!url.startsWith('http://')) {
-      console.warn('The protocol of the url should be http for live reload to work.');
-      return;
+    const wsUrl = this.getDedicatedWebSocketUrl(window.location);
+    if (wsUrl) {
+      this.connection = new WebSocket(wsUrl);
+      const self = this;
+      setInterval(function() {
+        if (self.connection !== null) {
+          self.connection.send('');
+        }
+      }, VaadinDevmodeGizmo.HEARTBEAT_INTERVAL);
     }
-    const wsUrl = url.replace(/^http:/, 'ws:') + '?refresh_connection';
-    const self = this;
-    this.connection = new WebSocket(wsUrl);
-    setInterval(function() {
-      if (self.connection !== null) {
-        self.connection.send('');
-      }
-    }, VaadinDevmodeGizmo.HEARTBEAT_INTERVAL);
+  }
+
+  getDedicatedWebSocketUrl(location) {
+    let url;
+    if (this.serviceurl) {
+      url = this.serviceurl;
+    } else if (this.liveReloadPath) {
+      url = location.protocol + '//' + location.host + '/' + this.liveReloadPath;
+    } else {
+      url = location.href;
+    }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      console.warn('The protocol of the url should be http or https for live reload to work.');
+      return null;
+    }
+    return url.replace(/^http/, 'ws') + '?v-r=push&refresh_connection';
+  }
+
+  getSpringBootWebSocketUrl(location) {
+    const hostname = location.hostname;
+    const wsProtocol = location.protocol == 'https:' ? 'wss' : 'ws';
+    if (hostname.endsWith('gitpod.io')) {
+      // Gitpod uses `port-url` instead of `url:port`
+      const hostnameWithoutPort = hostname.replace(/.*?-/, '');
+      return wsProtocol + '://' + this.springBootDevToolsPort + '-' + hostnameWithoutPort;
+    } else {
+      return wsProtocol + '://' + hostname + ':' + this.springBootDevToolsPort;
+    }
   }
 
   handleMessage(msg) {
-    const json = JSON.parse(msg.data);
+    let json;
+    try {
+      json = JSON.parse(msg.data);
+    } catch (e) {
+      this.handleError(`[${e.name}: ${e.message}`);
+      return;
+    }
     const command = json['command'];
     switch (command) {
       case 'hello': {
@@ -573,6 +631,11 @@ class VaadinDevmodeGizmo extends LitElement {
   handleError(msg) {
     console.error(msg);
     this.status = VaadinDevmodeGizmo.ERROR;
+    if (msg instanceof Event) {
+      this.showMessage(VaadinDevmodeGizmo.ERROR, VaadinDevmodeGizmo.WEBSOCKET_ERROR_MESSAGE + this.connection.url);
+    } else {
+      this.showMessage(VaadinDevmodeGizmo.ERROR, msg);
+    }
   }
 
   connectedCallback() {
@@ -737,28 +800,33 @@ class VaadinDevmodeGizmo extends LitElement {
 
   render() {
     return html`
-      <div class="vaadin-live-reload">
-
+      <div class="vaadin-devmode-gizmo-root">
       <div class="window ${this.expanded ? 'visible' : 'hidden'}">
         <div class="window-header">
+          <span class="title">Vaadin Development Mode</span>
+          <button class="minimize-button" @click=${e => this.toggleExpanded()}>
+            <svg xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px;">
+              <g stroke="#fff" stroke-width="1.25">
+                <rect rx="5" x="0.5" y="0.5" height="16" width="16" fill-opacity="0"/>
+                <line y2="12.1" x2="12.3" y1="3.4" x1="3" />
+                <line y2="8.5" x2="12.1" y1="12.4" x1="12.8" />
+                <line y2="12.1" x2="8.7" y1="12.1" x1="12.8" />
+              </g>
+            </svg>
+          </button>
+        </div>
+        <div class="window-tabs">
+          <span class="tab">Log</span>
+          <div>
             <label class="switch">
                 <input id="toggle" type="checkbox"
                     ?disabled=${this.status === VaadinDevmodeGizmo.UNAVAILABLE || this.status === VaadinDevmodeGizmo.ERROR}
                     ?checked="${this.status === VaadinDevmodeGizmo.ACTIVE}"
                     @change=${e => this.setActive(e.target.checked)}/>
                 <span class="slider"></span>
-             </label>
-             <span class="live-reload-text">Live-reload</span>
-             <button class="minimize-button" @click=${e => this.toggleExpanded()}>
-               <svg xmlns="http://www.w3.org/2000/svg" style="width: 18px; height: 18px;">
-                 <g stroke="#fff" stroke-width="1.25">
-                   <rect rx="5" x="0.5" y="0.5" height="16" width="16" fill-opacity="0"/>
-                   <line y2="12.1" x2="12.3" y1="3.4" x1="3" />
-                   <line y2="8.5" x2="12.1" y1="12.4" x1="12.8" />
-                   <line y2="12.1" x2="8.7" y1="12.1" x1="12.8" />
-                 </g>
-              </svg>
-            </button>
+            </label>
+            <span class="live-reload-text">Live-reload</span>
+          </div>
         </div>
         <div class="message-tray">
           ${this.messages.map(msg => this.renderMessage(msg))}
@@ -785,25 +853,5 @@ class VaadinDevmodeGizmo extends LitElement {
     </div>`;
   }
 }
-
-const init = function(serviceUrl, liveReloadBackend, springBootDevToolsPort) {
-  if ('false' !== window.localStorage.getItem(VaadinDevmodeGizmo.ENABLED_KEY_IN_LOCAL_STORAGE)) {
-    customElements.define('vaadin-devmode-gizmo', VaadinDevmodeGizmo);
-    const devmodeGizmo = document.createElement('vaadin-devmode-gizmo');
-    if (serviceUrl) {
-      devmodeGizmo.setAttribute('serviceurl', serviceUrl);
-    }
-    if (liveReloadBackend) {
-      devmodeGizmo.setAttribute('liveReloadBackend', liveReloadBackend);
-    }
-    if (springBootDevToolsPort) {
-      devmodeGizmo.setAttribute('springBootDevToolsPort', springBootDevToolsPort);
-    }
-    document.body.appendChild(devmodeGizmo);
-    return devmodeGizmo;
-  } else {
-    return undefined;
-  }
-};
 
 customElements.define('vaadin-devmode-gizmo', VaadinDevmodeGizmo);
