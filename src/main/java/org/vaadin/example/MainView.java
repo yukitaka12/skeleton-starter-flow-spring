@@ -10,6 +10,7 @@ import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.dependency.CssImport;
 import com.vaadin.flow.component.dependency.JsModule;
 import com.vaadin.flow.component.dependency.NpmPackage;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
@@ -33,7 +34,7 @@ import com.vaadin.flow.router.Route;
 @CssImport("./styles/shared-styles.css")
 @CssImport(value = "./styles/vaadin-text-field-styles.css", themeFor = "vaadin-text-field")
 @NpmPackage(value = "lit-element", version = "2.3.1")
-@JsModule("./vaadin-devmode-gizmo.js")
+@JsModule("./vaadin-devmode-gizmo.ts")
 public class MainView extends VerticalLayout {
 
     /**
@@ -94,6 +95,22 @@ public class MainView extends VerticalLayout {
                             jsString(splashMessageField.getValue())));
         });
         add(showSplashMessage);
+
+        add(new HorizontalLayout(new Button("Close Java channel",
+                e -> getUI().get().getPage().executeJs(
+                        "window.Vaadin.Flow.devModeGizmo.javaConnection.webSocket.close()")),
+                new Button("Error Java channel",
+                        e -> getUI().get().getPage().executeJs(
+                                "window.Vaadin.Flow.devModeGizmo.javaConnection.webSocket.onerror('Faked error on Java channel');"
+                                        + "window.Vaadin.Flow.devModeGizmo.javaConnection.webSocket.close()"))));
+
+        add(new HorizontalLayout(new Button("Close frontend channel",
+                e -> getUI().get().getPage().executeJs(
+                        "window.Vaadin.Flow.devModeGizmo.frontendConnection.webSocket.close()")),
+                new Button("Error frontend channel",
+                        e -> getUI().get().getPage().executeJs(
+                                "window.Vaadin.Flow.devModeGizmo.frontendConnection.webSocket.onerror('Faked error on frontend channel');"
+                                        + "window.Vaadin.Flow.devModeGizmo.frontendConnection.webSocket.close()"))));
     }
 
     private static String jsString(String s) {
@@ -102,11 +119,13 @@ public class MainView extends VerticalLayout {
 
     protected void onAttach(AttachEvent e) {
         getUI().get().getPage().executeJs(
-                "let gizmo = document.createElement('vaadin-devmode-gizmo');"
-                        + "gizmo.setAttribute('springbootdevtoolsport','35729');"
-                        + "gizmo.setAttribute('liveReloadBackend','SPRING_BOOT_DEVTOOLS');"
+                "[...document.getElementsByTagName('vaadin-devmode-gizmo')].forEach(elm => elm.remove());"
+                        + "let gizmo = document.createElement('vaadin-devmode-gizmo');"
+                        + "gizmo.setAttribute('url', './vaadinServlet');"
+                        + "gizmo.setAttribute('springbootlivereloadport','35729');"
+                        + "gizmo.setAttribute('backend','SPRING_BOOT_DEVTOOLS');"
                         + "document.body.appendChild(gizmo);"
-                        + "window.Gizmo = gizmo;");
+                        + "window.Vaadin.Flow.devModeGizmo = gizmo;");
     }
 
 }
