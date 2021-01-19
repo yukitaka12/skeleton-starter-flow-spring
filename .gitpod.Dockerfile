@@ -1,7 +1,5 @@
 FROM gitpod/workspace-full
 
-# Install custom tools, runtime, etc.
-RUN sudo apt-get update \
-    && sudo apt-get install -y chrome \
-    && sudo rm -rf /var/lib/apt/lists/*
-
+RUN sudo wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+RUN sudo apt-get update
+RUN sudo apt -y install ./google-chrome-stable_current_amd64.deb
