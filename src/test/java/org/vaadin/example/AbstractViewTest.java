@@ -4,7 +4,7 @@ import com.vaadin.flow.theme.AbstractTheme;
 import com.vaadin.testbench.ScreenshotOnFailureRule;
 import com.vaadin.testbench.TestBench;
 import com.vaadin.testbench.parallel.ParallelTest;
-import io.github.bonigarcia.wdm.WebDriverManager;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -12,6 +12,11 @@ import org.junit.Rule;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
+import org.slf4j.LoggerFactory;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import io.github.bonigarcia.wdm.WebDriverManager;
 
 /**
  * Base class for TestBench IntegrationTests on chrome.
@@ -29,6 +34,13 @@ import org.openqa.selenium.chrome.ChromeDriver;
  */
 public abstract class AbstractViewTest extends ParallelTest {
     private static final int SERVER_PORT = 8080;
+
+    static {
+        // Prevent debug logging from Apache HTTP client when WebDriverManager downloads
+        // a webdriver
+        Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+        root.setLevel(Level.INFO);
+    }
 
     private final String route;
     private final By rootSelector;
