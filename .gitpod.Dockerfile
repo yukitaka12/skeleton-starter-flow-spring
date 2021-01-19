@@ -1,7 +1,7 @@
 FROM gitpod/workspace-full
 
 RUN sudo apt-get -q update && \
-    sudo apt-get install -yq chromium-browser && \
+    sudo apt-get install -yq chromium-browser libnss3 && \
     sudo rm -rf /var/lib/apt/lists/*
 
 RUN bash -c ". /home/gitpod/.sdkman/bin/sdkman-init.sh \
