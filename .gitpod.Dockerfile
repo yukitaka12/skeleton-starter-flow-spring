@@ -1,7 +1,9 @@
 FROM gitpod/workspace-full
 
-RUN sudo apt-get -q update && \
-    sudo apt-get install -yq chromium-browser libnss3 libx11-xcb-dev && \
+RUN sudo wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+RUN sudo apt-get -q update
+RUN sudo apt -y install ./google-chrome-stable_current_amd64.deb
+RUN sudo apt-get install -yq libnss3 libx11-xcb-dev && \
     sudo rm -rf /var/lib/apt/lists/*
 
 RUN bash -c ". /home/gitpod/.sdkman/bin/sdkman-init.sh \
