@@ -12,6 +12,10 @@ import org.junit.Rule;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
+import org.slf4j.LoggerFactory;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 
 /**
  * Base class for TestBench IntegrationTests on chrome.
@@ -32,6 +36,12 @@ public abstract class AbstractViewTest extends ParallelTest {
 
     private final String route;
     private final By rootSelector;
+
+    static {
+        // Prevent debug logging from Apache HTTP client when chromdriver is downloaded
+        Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+        root.setLevel(Level.INFO);
+    }
 
     @Rule
     public ScreenshotOnFailureRule rule = new ScreenshotOnFailureRule(this,
