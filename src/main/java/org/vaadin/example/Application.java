@@ -1,11 +1,13 @@
 package org.vaadin.example;
 
 import com.vaadin.flow.component.page.AppShellConfigurator;
+import com.vaadin.flow.component.page.Push;
 import com.vaadin.flow.server.PWA;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * The entry point of the Spring Boot application.
@@ -15,6 +17,8 @@ import org.springframework.boot.web.servlet.support.SpringBootServletInitializer
  *
  */
 @SpringBootApplication
+@EnableScheduling
+@Push
 @PWA(name = "Project Base for Vaadin with Spring", shortName = "Project Base")
 public class Application extends SpringBootServletInitializer implements AppShellConfigurator {
 
